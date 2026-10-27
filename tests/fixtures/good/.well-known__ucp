@@ -1,0 +1,1 @@
+{"ucp": {"version": "2026-08-25", "services": {"dev.ucp.shopping": [{"transport": "mcp", "endpoint": "https://good.test/api/ucp/mcp"}]}, "capabilities": {"dev.ucp.shopping.checkout": [{}]}}}
