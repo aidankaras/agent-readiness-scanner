@@ -1,7 +1,7 @@
 # CHECKS.md — M0 findings (2026-10-18)
 
 Purpose: what agents actually consume, verified at primary sources, so SPEC.md checks and weights rest on evidence. Every claim below carries a source. Labels: **[V]** = read at primary source today; **[L]** = observed live on a real store today (1 store, single-point evidence); **[U]** = not verified / gap.
-Raw page copies: /opt/data/cache/web/ (developers.openai.com, developers.google.com, shopify.dev, help.shopify.com, ucp.dev; prunable cache, re-fetch if needed).
+Sources fetched from: developers.openai.com, developers.google.com, shopify.dev, help.shopify.com, ucp.dev.
 
 ## 1. Platform claims, verified
 
