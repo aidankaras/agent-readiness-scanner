@@ -25,7 +25,7 @@ pytest                                # offline fixture tests
 
 ## Example output
 
-Report for the bundled test store (`tests/fixtures/good`), abridged:
+Report for the bundled test store (`tests/fixtures/good`), abridged. Full reports for a good and a bad fixture store, as markdown and JSON, are in [examples/](examples/) (a test keeps them in sync with the code):
 
 ```text
 # Agent-readiness report: https://good.test
@@ -85,6 +85,10 @@ Decisions worth noting:
 
 Weights are provisional; see [docs/SPEC.md](docs/SPEC.md).
 
+## Tests
+
+`pytest` runs offline against fixture stores in `tests/fixtures` (good, bad, bot-wall, training-bot-block). It covers scoring weights, determinism, report output, and each check's pass/partial/fail paths. Nothing hits the network.
+
 ## How it crawls
 
 - Identifies itself (`agent-readiness-scanner/0.3`) and obeys robots.txt for its own user agent.
@@ -95,6 +99,15 @@ Weights are provisional; see [docs/SPEC.md](docs/SPEC.md).
 
 - Product and policy page discovery is heuristic; a "not found" can be a scanner miss.
 - A single scan is a snapshot.
+- The first-study raw data is not included in this repo; the findings doc reports aggregates only and can't be reproduced from here.
+- Weights are hand-set, not fitted.
 - It measures documented signals, not whether agents actually recommend or sell a store's products.
+
+## Roadmap
+
+- Publish the study's store list and per-store results so the findings are reproducible.
+- Fit weights against an outcome measure once any public data on agent behavior exists.
+- Exercise the UCP protocol (not just GET the profile) behind an explicit flag.
+- Better policy-page discovery; fewer false "not found".
 
 MIT licensed.

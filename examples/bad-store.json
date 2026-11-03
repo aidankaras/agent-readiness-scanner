@@ -1,0 +1,78 @@
+{
+  "url": "https://bad.test",
+  "score": 5.0,
+  "checks": [
+    {
+      "id": "c1",
+      "name": "Page data quality (JSON-LD, crawler fallback)",
+      "status": "fail",
+      "evidence": [
+        "https://bad.test/products/thing: no Product JSON-LD"
+      ],
+      "fix": "Add schema.org Product + Offer JSON-LD with name, image, brand, price, priceCurrency, availability."
+    },
+    {
+      "id": "c2",
+      "name": "Catalog / endpoint access",
+      "status": "partial",
+      "evidence": [
+        "sitemap.xml: 1 product URLs",
+        "no UCP endpoint declared"
+      ],
+      "fix": "Publish product URLs in sitemap.xml and expose a reachable UCP endpoint (Shopify does this automatically for eligible stores)."
+    },
+    {
+      "id": "c3",
+      "name": "Content completeness",
+      "status": "fail",
+      "evidence": [
+        "https://bad.test/products/thing: missing ['title 1-150 chars', 'description >=150 chars', 'image', 'image alt text', 'brand', 'price', 'availability', 'GTIN or MPN']"
+      ],
+      "fix": "Fill in: GTIN or MPN, availability, brand, description >=150 chars, image, image alt text, price, title 1-150 chars. OpenAI feeds require title, description, url, brand, seller, image, price, availability; GTIN/MPN strongly recommended."
+    },
+    {
+      "id": "c4",
+      "name": "Policy clarity",
+      "status": "fail",
+      "evidence": [
+        "returns: not found",
+        "shipping: not found",
+        "contact: not found",
+        "return window stated: no"
+      ],
+      "fix": "Publish reachable returns (with window in days and cost), shipping, and contact pages; Google requires return window/cost/link and a support contact for agentic checkout."
+    },
+    {
+      "id": "c5",
+      "name": "Agent access",
+      "status": "fail",
+      "evidence": [
+        "robots.txt HTTP 200; shopping/search agents blocked on product page: ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User']",
+        "info: training crawlers blocked (not scored): ['GPTBot', 'Google-Extended', 'ClaudeBot']",
+        "agent discovery files: none (bonus only)"
+      ],
+      "fix": "Allow AI shopping agents in robots.txt and avoid bot challenges on product pages. Optional: publish /agents.md or /llms.txt."
+    },
+    {
+      "id": "c6",
+      "name": "Checkout signals (UCP profile)",
+      "status": "fail",
+      "evidence": [
+        "/.well-known/ucp: HTTP 404"
+      ],
+      "fix": "Publish a UCP profile at /.well-known/ucp (automatic on eligible Shopify stores; otherwise via Google's UCP integration)."
+    },
+    {
+      "id": "c7",
+      "name": "Checkout-ineligible flags (informational)",
+      "status": "info",
+      "evidence": [
+        "https://bad.test/products/thing: final sale",
+        "https://bad.test/products/thing: pre-order"
+      ],
+      "fix": "Google marks subscriptions, final-sale and pre-order items ineligible for agentic checkout; flag them in Merchant Center."
+    }
+  ],
+  "scanned_at": "2026-10-27T00:00:00Z",
+  "version": "0.3.0"
+}
