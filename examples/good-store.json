@@ -1,0 +1,79 @@
+{
+  "url": "https://good.test",
+  "score": 85.0,
+  "checks": [
+    {
+      "id": "c1",
+      "name": "Page data quality (JSON-LD, crawler fallback)",
+      "status": "pass",
+      "evidence": [
+        "https://good.test/products/wool-runner: Product JSON-LD, missing none"
+      ],
+      "fix": ""
+    },
+    {
+      "id": "c2",
+      "name": "Catalog / endpoint access",
+      "status": "pass",
+      "evidence": [
+        "sitemap.xml: 1 product URLs",
+        "UCP endpoint https://good.test/api/ucp/mcp declared; GET probe HTTP 200 (host answers; protocol not exercised)"
+      ],
+      "fix": ""
+    },
+    {
+      "id": "c3",
+      "name": "Content completeness",
+      "status": "partial",
+      "evidence": [
+        "https://good.test/products/wool-runner: missing ['image alt text']"
+      ],
+      "fix": "Fill in: image alt text. OpenAI feeds require title, description, url, brand, seller, image, price, availability; GTIN/MPN strongly recommended."
+    },
+    {
+      "id": "c4",
+      "name": "Policy clarity",
+      "status": "pass",
+      "evidence": [
+        "returns: /pages/returns",
+        "shipping: /pages/shipping",
+        "contact: /pages/contact",
+        "return window stated: yes"
+      ],
+      "fix": ""
+    },
+    {
+      "id": "c5",
+      "name": "Agent access",
+      "status": "pass",
+      "evidence": [
+        "robots.txt HTTP 200; shopping/search agents blocked on product page: none",
+        "info: training crawlers blocked (not scored): none",
+        "agent discovery files: ['/llms.txt'] (bonus only)"
+      ],
+      "fix": ""
+    },
+    {
+      "id": "c6",
+      "name": "Checkout signals (UCP profile)",
+      "status": "pass",
+      "evidence": [
+        "ucp.version 2026-08-25",
+        "services ['dev.ucp.shopping']",
+        "capabilities ['dev.ucp.shopping.checkout']"
+      ],
+      "fix": ""
+    },
+    {
+      "id": "c7",
+      "name": "Checkout-ineligible flags (informational)",
+      "status": "info",
+      "evidence": [
+        "none detected"
+      ],
+      "fix": ""
+    }
+  ],
+  "scanned_at": "2026-10-27T00:00:00Z",
+  "version": "0.3.0"
+}

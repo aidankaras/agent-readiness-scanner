@@ -74,3 +74,11 @@ def test_product_url_patterns():
     for u in ["https://x.com/products/a","https://x.com/product/a/","https://x.com/shop/p/a","https://x.com/product-page/a"]:
         assert PROD_RE.search(u), u
     assert not PROD_RE.search("https://x.com/pages/about")
+
+
+def test_examples_match_code():
+    root = pathlib.Path(__file__).parents[1] / "examples"
+    for name in ("good", "bad"):
+        res = scan(f"https://{name}.test", FixtureFetcher(f"https://{name}.test", FX / name), now="2026-10-27T00:00:00Z")
+        assert (root / f"{name}-store.md").read_text() == markdown(res)
+        assert json.loads((root / f"{name}-store.json").read_text()) == res
