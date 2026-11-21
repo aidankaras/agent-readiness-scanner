@@ -7,7 +7,7 @@
 
 ## PASS Catalog / endpoint access (weight 10)
 - sitemap.xml: 1 product URLs
-- UCP endpoint https://good.test/api/ucp/mcp declared; GET probe HTTP 200 (host answers; protocol not exercised)
+- UCP endpoint https://good.test/api/ucp/mcp declared; GET probe HTTP 200 (answers; protocol not exercised)
 
 ## PASS Content completeness (weight 30)
 - https://good.test/products/wool-runner: missing none

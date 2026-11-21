@@ -195,3 +195,51 @@ def test_c4_partial_policy_without_window(tmp_path):
     r = store(tmp_path, {"pages__returns": ret})
     c = check(r, "c4")
     assert c["status"] == "partial" and "return window stated: no" in c["evidence"], c
+
+
+# --- c2 catalog / endpoint access ---
+
+class StatusFetcher(FixtureFetcher):
+    """FixtureFetcher that answers chosen paths with a fixed status code."""
+
+    def __init__(self, base, root, statuses):
+        super().__init__(base, root)
+        self.statuses = statuses
+
+    def get(self, url):
+        from ars.fetch import Resp
+        import urllib.parse
+        path = urllib.parse.urlsplit(url).path
+        if path in self.statuses:
+            return Resp(url, self.statuses[path], "text/html", "")
+        return super().get(url)
+
+
+def c2_with_endpoint_status(code):
+    f = StatusFetcher("https://good.test", FX / "good", {"/api/ucp/mcp": code})
+    return check(scan("https://good.test", f, now="2026-01-01T00:00:00Z"), "c2")
+
+
+def test_c2_declared_endpoint_404_is_not_reachable():
+    for code in (404, 410):
+        c = c2_with_endpoint_status(code)
+        assert c["status"] == "partial", c  # sitemap only
+        assert "path not found" in c["evidence"][1]
+
+
+def test_c2_post_only_endpoint_still_answers():
+    for code in (405, 401, 403, 400):
+        assert c2_with_endpoint_status(code)["status"] == "pass", code
+
+
+def test_c2_endpoint_down():
+    c = c2_with_endpoint_status(503)
+    assert c["status"] == "partial" and "unreachable" in c["evidence"][1]
+
+
+def test_c2_fail_and_sitemap_evidence(tmp_path):
+    r = store(tmp_path, {}, drop=("sitemap.xml", ".well-known__ucp"))
+    c = check(r, "c2")
+    assert c["status"] == "fail" and c["evidence"][0] == "sitemap.xml: HTTP 404 (not available)", c
+    r2 = store(tmp_path, {"sitemap.xml": "<urlset><url><loc>https://tmp2.test/pages/about</loc></url></urlset>"}, name="tmp2")
+    assert check(r2, "c2")["evidence"][0] == "sitemap.xml: HTTP 200, no product URLs"

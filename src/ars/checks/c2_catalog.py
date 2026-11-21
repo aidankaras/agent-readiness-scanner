@@ -19,15 +19,22 @@ def check(ctx):
     ev = []
     prod, sm = ctx.sitemap_product_urls()
     has_sitemap = bool(prod)
-    ev.append(f"sitemap.xml: {'%d product URLs' % len(prod) if prod else ('HTTP %s' % sm.status if sm else 'no product URLs')}")
+    if prod:
+        ev.append(f"sitemap.xml: {len(prod)} product URLs")
+    elif sm.ok:
+        ev.append(f"sitemap.xml: HTTP {sm.status}, no product URLs")
+    else:
+        ev.append(f"sitemap.xml: HTTP {sm.status} (not available)")
     eps = ucp_endpoints(ctx)
     reachable = None
     if eps:
         ep = eps[0]
         r = ctx.get(ep)
-        # MCP endpoints expect JSON-RPC POST; a GET probe only proves the host answers. Count declared + host up.
-        reachable = r.status > 0 and r.status < 500
-        ev.append(f"UCP endpoint {ep} declared; GET probe HTTP {r.status} (host {'answers' if reachable else 'unreachable'}; protocol not exercised)")
+        # MCP endpoints expect JSON-RPC POST, so a GET may get 405/400/401/403: the endpoint exists and answers.
+        # 404/410 mean the declared path doesn't exist; 5xx and network errors mean it is down.
+        reachable = 0 < r.status < 500 and r.status not in (404, 410)
+        why = "answers" if reachable else "path not found" if r.status in (404, 410) else "unreachable"
+        ev.append(f"UCP endpoint {ep} declared; GET probe HTTP {r.status} ({why}; protocol not exercised)")
     else:
         ev.append("no UCP endpoint declared")
     if ctx.is_shopify():

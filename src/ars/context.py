@@ -71,9 +71,10 @@ class Ctx:
         return r.ok and '"products"' in r.text
 
     def sitemap_product_urls(self):
+        """(product URLs, sitemap response). The response is returned even when it isn't 2xx."""
         r = self.get("/sitemap.xml")
         if not r.ok:
-            return [], None
+            return [], r
         locs = LOC_RE.findall(r.text)
         subs = [u for u in locs if u.endswith(".xml") or "sitemap" in u]
         prod = [u for u in locs if PROD_RE.search(u)]
