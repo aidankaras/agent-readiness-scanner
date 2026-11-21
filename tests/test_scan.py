@@ -285,3 +285,44 @@ def test_crashing_check_is_recorded_not_raised(monkeypatch):
     c = check(r, "c4")
     assert c["status"] == "fail" and c["name"] == c4.NAME and "RuntimeError: kaput" in c["evidence"][0]
     assert r["score"] == 80.0
+
+
+# --- Shopify path: discovery via /products.json, content from /products/<handle>.json ---
+
+def test_shopify_store():
+    r = run("shopify")
+    assert st(r) == {"c1": "partial", "c2": "partial", "c3": "partial", "c4": "pass", "c5": "pass", "c6": "pass", "c7": "info"}, r
+    assert r["score"] == 72.5
+    c2, c3 = check(r, "c2"), check(r, "c3")
+    assert any("/products.json public" in e for e in c2["evidence"])
+    # discovered through /products.json?limit=5 (no sitemap), in catalog order
+    assert c3["evidence"] == ["https://shopify.test/products/linen-shirt: missing none",
+                              "https://shopify.test/products/wool-hat: missing ['image alt text', 'GTIN or MPN']"]
+
+
+def test_shopify_facts_from_product_json():
+    from ars.checks.c3_completeness import gather
+    from ars.context import Ctx
+    ctx = Ctx("https://shopify.test", FixtureFetcher("https://shopify.test", FX / "shopify"))
+    url, pg = ctx.product_pages()[1]
+    d = gather(ctx, url, pg)
+    assert d["title"] == "Wool Beanie" and d["brand"] == "Shopify Test Co" and len(d["desc"]) >= 150
+    assert (d["images"], d["alts"], d["alt_of"]) == (1, 0, 1)
+    assert d["price"] and not d["ident"] and d["variants_ok"]
+    assert d["avail"]  # not in this page's JSON-LD; taken from the variant's "available" key
+
+
+def test_shopify_unlabeled_variants(tmp_path):
+    p = json.loads((FX / "shopify" / "products__linen-shirt.json").read_text())
+    for v in p["product"]["variants"]:
+        v["title"] = "Default Title"
+    r = store(tmp_path, {"products__linen-shirt.json": json.dumps(p)}, base="shopify")
+    assert "variants labeled" in check(r, "c3")["evidence"][0]
+
+
+def test_shopify_sitemap_index_is_followed(tmp_path):
+    files = {"sitemap.xml": "<sitemapindex><sitemap><loc>https://tmp.test/sitemap_products_1.xml</loc></sitemap></sitemapindex>",
+             "sitemap_products_1.xml": "<urlset><url><loc>https://tmp.test/products/wool-hat</loc></url></urlset>"}
+    r = store(tmp_path, files, base="shopify")
+    assert check(r, "c2")["evidence"][0] == "sitemap.xml: 1 product URLs"
+    assert check(r, "c3")["evidence"][0].startswith("https://tmp.test/products/wool-hat")
