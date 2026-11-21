@@ -143,3 +143,55 @@ def test_img_tag_parsing():
     assert tags == [{"src": "a.jpg", "alt": "x & y"}, {"data-src": "b.jpg"}]
     assert html_alt_counts("<img src=a.jpg alt=x><img src=b.jpg>", []) == (2, 1)
     assert html_alt_counts("<p>no images</p>", ["https://x/a.jpg"]) == (0, 0)
+
+
+# --- c4 policy pages: soft 404s, JS shells, keyword match ---
+
+class AlwaysFetcher:
+    """Answers every URL with the same 200 HTML body; `final` (path) simulates a redirect."""
+
+    def __init__(self, body, final=None):
+        self.body, self.final = body, final
+
+    def get(self, url):
+        from ars.fetch import Resp
+        import urllib.parse
+        u = urllib.parse.urlsplit(url)
+        return Resp(f"{u.scheme}://{u.netloc}{self.final}" if self.final else url, 200, "text/html", self.body)
+
+
+def c4_of(fetcher):
+    return check(scan("https://spa.test", fetcher, now="2026-01-01T00:00:00Z"), "c4")
+
+
+def test_c4_js_shell_is_not_a_policy_page():
+    script = "window.__STATE__ = " + json.dumps({"copy": "Free shipping. 30-day returns. Contact support. " * 20})
+    shell = f"<html><head><title>Shop</title><script>{script}</script><style>body{{margin:0}}</style></head><body><div id=app></div></body></html>"
+    c = c4_of(AlwaysFetcher(shell))
+    assert c["status"] == "fail", c
+    assert "return window stated: no" in c["evidence"]
+
+
+def test_c4_soft_404_is_not_a_policy_page():
+    body = "<html><head><title>Page not found</title></head><body><h1>Page not found</h1>" + "<p>Browse our latest collections and new arrivals.</p>" * 8 + "<footer>Free shipping and 30-day returns. Contact us.</footer></body></html>"
+    assert c4_of(AlwaysFetcher(body))["status"] == "fail"
+
+
+def test_c4_redirect_to_home_is_not_a_policy_page():
+    body = "<html><body>" + "<p>Returns, shipping and contact information for our shop, 30 days.</p>" * 6 + "</body></html>"
+    assert c4_of(AlwaysFetcher(body, final="/"))["status"] == "fail"
+
+
+def test_c4_page_must_mention_its_topic(tmp_path):
+    about = "<p>" + "We are a small family business making shoes by hand in Maine. " * 6 + "</p>"
+    r = store(tmp_path, {"pages__returns": about}, drop=("pages__shipping",))
+    c = check(r, "c4")
+    assert "returns: not found" in c["evidence"] and "shipping: not found" in c["evidence"]
+    assert c["status"] == "fail"  # contact only: 1 of 4 points
+
+
+def test_c4_partial_policy_without_window(tmp_path):
+    ret = "<p>" + "Unworn items can be returned for a refund or exchange; email us to start a return. " * 4 + "</p>"
+    r = store(tmp_path, {"pages__returns": ret})
+    c = check(r, "c4")
+    assert c["status"] == "partial" and "return window stated: no" in c["evidence"], c

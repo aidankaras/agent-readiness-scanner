@@ -1,14 +1,10 @@
 import re, html
 from . import result
-from ..context import ld_products, walk
+from ..context import ld_products, walk, strip
 
 NAME = "Content completeness"
 IMG_RE = re.compile(r"<img\b[^>]*>", re.I)
 ATTR_RE = re.compile(r"""([a-zA-Z-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""")
-
-
-def strip(h):
-    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", h or ""))).strip()
 
 
 def img_tags(page_html):

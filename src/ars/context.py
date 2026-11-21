@@ -1,11 +1,24 @@
 """Shared per-scan state: base URL, fetcher, discovered product URLs, parsed product data."""
-import json, re, urllib.parse
+import html, json, re, urllib.parse
 from .fetch import Fetcher
 
 MAX_PRODUCTS = 3
 LD_RE = re.compile(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.S | re.I)
 PROD_RE = re.compile(r"/(products?|product-page|p|shop/p|store/p)/[^/?#]+/?$", re.I)
 LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.I)
+NONTEXT_RE = re.compile(r"<(script|style|noscript|template)\b.*?</\1\s*>", re.S | re.I)
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
+
+
+def strip(h):
+    """Visible text of an HTML fragment: drops <script>/<style>/<noscript>/<template> blocks, then tags."""
+    h = NONTEXT_RE.sub(" ", h or "")
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", h))).strip()
+
+
+def title_of(h):
+    m = TITLE_RE.search(h or "")
+    return strip(m.group(1)) if m else ""
 
 
 def norm_base(url):
