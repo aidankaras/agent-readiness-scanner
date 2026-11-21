@@ -7,7 +7,9 @@ Scores how ready an online store is for AI shopping agents (Google Universal Car
 
 **Why:** AI agents started browsing and checking out on shoppers' behalf in 2026. Store owners had no external way to see what those agents can read. Every check here is grounded in vendor documentation (Google, Shopify, OpenAI, ucp.dev), with sources and confidence labels in [docs/CHECKS.md](docs/CHECKS.md).
 
-**First study:** 75 small stores. Shopify median 85, Wix/Squarespace/WooCommerce median 45; missing alt text and GTINs everywhere. [Read the findings](docs/FINDINGS-2026-10.md).
+**First study (October 2026, scanner v0.3.0):** 75 small stores. Shopify median 85, Wix/Squarespace/WooCommerce median 45; no GTIN or MPN on 62% of product pages. [Read the findings](docs/FINDINGS-2026-10.md).
+
+**Correction:** the study's alt-text figure (missing on 66% of pages) came from a scanner bug: v0.3.0 could only read alt text on Shopify, so every non-Shopify page counted as missing. On Shopify pages, alt text was missing on at most 81 of 156 (52%). The non-Shopify medians may be understated for the same reason. Fixed in v0.4.0; the study has not been re-run. Details at the top of the findings doc.
 
 ## Quick start
 
