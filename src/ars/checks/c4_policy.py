@@ -62,4 +62,4 @@ def check(ctx):
     ev.append(f"return window stated: {'yes' if window else 'no'}")
     pts = got + window
     st = "pass" if pts == 4 else "partial" if pts >= 2 else "fail"
-    return result("c4", NAME, st, ev, "Publish reachable returns (with window in days and cost), shipping, and contact pages; Google requires return window/cost/link and a support contact for agentic checkout.")
+    return result("c4", NAME, st, ev, "Publish reachable returns (state the window in days), shipping, and contact pages. Google also requires the return cost, a policy link and a support contact for agentic checkout; this scanner checks only the pages and the window.")

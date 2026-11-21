@@ -1,6 +1,6 @@
 # Agent-readiness report: https://good.test
 
-**Score: 100.0/100** (scanner v0.3.0, 2026-10-27T00:00:00Z; weights are provisional)
+**Score: 100.0/100** (scanner v0.4.0, 2026-10-27T00:00:00Z; weights are provisional)
 
 ## PASS Page data quality (JSON-LD, crawler fallback) (weight 15)
 - https://good.test/products/wool-runner: Product JSON-LD, missing none
@@ -21,7 +21,7 @@
 ## PASS Agent access (weight 10)
 - robots.txt HTTP 200; shopping/search agents blocked on product page: none
 - info: training crawlers blocked (not scored): none
-- agent discovery files: ['/llms.txt'] (bonus only)
+- info: agent discovery files (not scored): ['/llms.txt']
 
 ## PASS Checkout signals (UCP profile) (weight 15)
 - ucp.version 2026-08-25

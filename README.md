@@ -29,7 +29,7 @@ Report for the bundled test store (`tests/fixtures/good`), abridged. Full report
 
 ```text
 # Agent-readiness report: https://good.test
-**Score: 100.0/100** (scanner v0.3.0, 2026-10-27T00:00:00Z; weights are provisional)
+**Score: 100.0/100** (scanner v0.4.0, 2026-10-27T00:00:00Z; weights are provisional)
 ## PASS Page data quality (JSON-LD, crawler fallback) (weight 15)
 - https://good.test/products/wool-runner: Product JSON-LD, missing none
 ## PASS Catalog / endpoint access (weight 10)
@@ -45,7 +45,7 @@ Report for the bundled test store (`tests/fixtures/good`), abridged. Full report
 ## PASS Agent access (weight 10)
 - robots.txt HTTP 200; shopping/search agents blocked on product page: none
 - info: training crawlers blocked (not scored): none
-- agent discovery files: ['/llms.txt'] (bonus only)
+- info: agent discovery files (not scored): ['/llms.txt']
 ## PASS Checkout signals (UCP profile) (weight 15)
 - ucp.version 2026-08-25
 - services ['dev.ucp.shopping']
@@ -90,7 +90,7 @@ Weights are provisional; see [docs/SPEC.md](docs/SPEC.md).
 
 ## How it crawls
 
-- Identifies itself (`agent-readiness-scanner/0.3`) and obeys robots.txt for its own user agent.
+- Identifies itself (`agent-readiness-scanner/0.4`) and obeys robots.txt for its own user agent.
 - One request per second, at most 3 product pages per store, no login-gated pages, no checkout actions.
 - The UCP endpoint is only probed with a GET; the protocol itself is not exercised.
 

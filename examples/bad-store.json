@@ -40,7 +40,7 @@
         "contact: not found",
         "return window stated: no"
       ],
-      "fix": "Publish reachable returns (with window in days and cost), shipping, and contact pages; Google requires return window/cost/link and a support contact for agentic checkout."
+      "fix": "Publish reachable returns (state the window in days), shipping, and contact pages. Google also requires the return cost, a policy link and a support contact for agentic checkout; this scanner checks only the pages and the window."
     },
     {
       "id": "c5",
@@ -49,7 +49,7 @@
       "evidence": [
         "robots.txt HTTP 200; shopping/search agents blocked on product page: ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User']",
         "info: training crawlers blocked (not scored): ['GPTBot', 'Google-Extended', 'ClaudeBot']",
-        "agent discovery files: none (bonus only)"
+        "info: agent discovery files (not scored): none"
       ],
       "fix": "Allow AI shopping agents in robots.txt and avoid bot challenges on product pages. Optional: publish /agents.md or /llms.txt."
     },
@@ -74,5 +74,5 @@
     }
   ],
   "scanned_at": "2026-10-27T00:00:00Z",
-  "version": "0.3.0"
+  "version": "0.4.0"
 }

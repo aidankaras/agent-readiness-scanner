@@ -4,7 +4,7 @@ from . import __version__
 from .checks import ALL
 from .context import Ctx
 
-# v0.3 (after M2 Shopify sample): checks every Shopify store passes by default (c2,c5,c6) weigh less;
+# v0.3 weights (set after the first Shopify sample; unchanged in v0.4): checks every Shopify store passes by default (c2,c5,c6) weigh less;
 # merchant-controlled content (c3,c4) weighs more. Still provisional.
 WEIGHTS = {"c1": 15, "c2": 10, "c3": 30, "c4": 20, "c5": 10, "c6": 15}
 VALUE = {"pass": 1.0, "partial": 0.5, "fail": 0.0}

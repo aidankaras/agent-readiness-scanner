@@ -1,6 +1,6 @@
 # Agent-readiness report: https://bad.test
 
-**Score: 5.0/100** (scanner v0.3.0, 2026-10-27T00:00:00Z; weights are provisional)
+**Score: 5.0/100** (scanner v0.4.0, 2026-10-27T00:00:00Z; weights are provisional)
 
 ## FAIL Page data quality (JSON-LD, crawler fallback) (weight 15)
 - https://bad.test/products/thing: no Product JSON-LD
@@ -24,12 +24,12 @@ Fix: Fill in: GTIN or MPN, availability, brand, description >=150 chars, image, 
 - contact: not found
 - return window stated: no
 
-Fix: Publish reachable returns (with window in days and cost), shipping, and contact pages; Google requires return window/cost/link and a support contact for agentic checkout.
+Fix: Publish reachable returns (state the window in days), shipping, and contact pages. Google also requires the return cost, a policy link and a support contact for agentic checkout; this scanner checks only the pages and the window.
 
 ## FAIL Agent access (weight 10)
 - robots.txt HTTP 200; shopping/search agents blocked on product page: ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User']
 - info: training crawlers blocked (not scored): ['GPTBot', 'Google-Extended', 'ClaudeBot']
-- agent discovery files: none (bonus only)
+- info: agent discovery files (not scored): none
 
 Fix: Allow AI shopping agents in robots.txt and avoid bot challenges on product pages. Optional: publish /agents.md or /llms.txt.
 

@@ -2,7 +2,7 @@
 import time, urllib.request, urllib.error, urllib.robotparser, urllib.parse
 from dataclasses import dataclass
 
-UA = "agent-readiness-scanner/0.3 (+https://github.com/aidankaras/agent-readiness-scanner)"
+UA = "agent-readiness-scanner/0.4 (+https://github.com/aidankaras/agent-readiness-scanner)"
 
 
 @dataclass
