@@ -1,5 +1,5 @@
 import urllib.robotparser
-from . import result
+from ._result import result
 
 NAME = "Agent access"
 # robots.txt tokens verified at vendor docs 2026-10-23 (see CHECKS.md "Crawler tokens").

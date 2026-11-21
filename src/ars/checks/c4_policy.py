@@ -1,5 +1,5 @@
 import re, urllib.parse
-from . import result
+from ._result import result
 from ..context import strip, title_of
 
 NAME = "Policy clarity"

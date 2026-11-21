@@ -1,5 +1,5 @@
 import re, html
-from . import result
+from ._result import result
 from ..context import ld_products, walk, strip
 
 NAME = "Content completeness"

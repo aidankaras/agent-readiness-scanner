@@ -1,4 +1,4 @@
-from . import result
+from ._result import result
 from ..context import ld_products, walk
 
 NAME = "Page data quality (JSON-LD, crawler fallback)"
@@ -7,17 +7,13 @@ FIELDS = ["name", "image", "brand", "price", "priceCurrency", "availability"]
 
 def offer_fields(p):
     have = {k for k in ("name", "image", "brand") if p.get(k)}
-    for o in walk(p.get("offers", {})):
+    offers = [p.get("offers", {})] + [v.get("offers", {}) for v in walk(p.get("hasVariant", []))]
+    for o in walk(offers):
         for k in ("price", "priceCurrency", "availability"):
             if o.get(k) not in (None, ""):
                 have.add(k)
         if o.get("lowPrice"):
             have.add("price")
-    for v in walk(p.get("hasVariant", [])):
-        for o in walk(v.get("offers", {})):
-            for k in ("price", "priceCurrency", "availability"):
-                if o.get(k) not in (None, ""):
-                    have.add(k)
     return have
 
 

@@ -1,5 +1,5 @@
 import re
-from . import result
+from ._result import result
 
 NAME = "Checkout-ineligible flags (informational)"
 PATTERNS = {"subscription": r"subscribe\s*(&|and)\s*save", "final sale": r"final\s+sale", "pre-order": r"pre-?order"}

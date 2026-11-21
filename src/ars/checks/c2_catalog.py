@@ -1,5 +1,5 @@
 import json
-from . import result
+from ._result import result
 from ..context import walk
 
 NAME = "Catalog / endpoint access"

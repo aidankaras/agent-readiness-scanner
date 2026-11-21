@@ -1,5 +1,5 @@
 import json
-from . import result
+from ._result import result
 
 NAME = "Checkout signals (UCP profile)"
 
