@@ -92,9 +92,16 @@ def test_training_block_not_penalized():
     assert any("GPTBot" in e for e in c5["evidence"])
 
 
-def test_partial_agent_block():
+def test_agent_token_lists():
     import ars.checks.c5_agent_access as m
     assert "Storebot-Google" in m.AGENT_UAS and "GPTBot" not in m.AGENT_UAS
+    assert not set(m.AGENT_UAS) & set(m.TRAINING_UAS)
+
+
+def test_c5_partial_agent_block(tmp_path):
+    r = store(tmp_path, {"robots.txt": "User-agent: PerplexityBot\nDisallow: /\n"})
+    c = check(r, "c5")
+    assert c["status"] == "partial" and "['PerplexityBot']" in c["evidence"][0], c
 
 
 def test_product_url_patterns():
@@ -326,3 +333,100 @@ def test_shopify_sitemap_index_is_followed(tmp_path):
     r = store(tmp_path, files, base="shopify")
     assert check(r, "c2")["evidence"][0] == "sitemap.xml: 1 product URLs"
     assert check(r, "c3")["evidence"][0].startswith("https://tmp.test/products/wool-hat")
+
+
+# --- other partial paths and product discovery ---
+
+def test_c1_partial_missing_fields(tmp_path):
+    ld = {"@type": "Product", "name": "Wool Runner", "image": "https://tmp.test/i.jpg", "brand": "GoodCo"}
+    c = check(store(tmp_path, {"products__wool-runner": page(ld=ld)}), "c1")
+    assert c["status"] == "partial" and "['price', 'priceCurrency', 'availability']" in c["evidence"][0], c
+
+
+def test_c1_offers_on_variants_count(tmp_path):
+    ld = {"@type": "ProductGroup", "name": "Wool Runner", "image": "https://tmp.test/i.jpg", "brand": "GoodCo",
+          "hasVariant": [{"@type": "Product", "offers": {"price": "98", "priceCurrency": "USD", "availability": "InStock"}}]}
+    assert check(store(tmp_path, {"products__wool-runner": page(ld=ld)}), "c1")["status"] == "pass"
+
+
+def test_woocommerce_store_api_discovery(tmp_path):
+    api = json.dumps([{"id": 7, "permalink": "https://tmp.test/product/mug/"}, {"id": 8, "permalink": ""}])
+    files = {"wp-json__wc__store__v1__products__per_page-5": api, "product__mug": page()}
+    r = store(tmp_path, files, drop=("sitemap.xml", "products__wool-runner"))
+    assert check(r, "c3")["evidence"][0].startswith("https://tmp.test/product/mug/:")
+
+
+def test_generic_link_discovery(tmp_path):
+    home = '<a href="/pages/returns">Returns</a> <a href="/shop/p/mug">Mug</a> <a href="https://elsewhere.test/products/x">x</a> <a href="/shop/p/mug">again</a>'
+    r = store(tmp_path, {"index": home, "shop__p__mug": page()}, drop=("sitemap.xml", "products__wool-runner"))
+    assert [e.split(":")[0] + ":" + e.split(":")[1] for e in check(r, "c3")["evidence"]] == ["https://tmp.test/shop/p/mug"]
+
+
+def test_no_products_found(tmp_path):
+    r = store(tmp_path, {}, drop=("sitemap.xml", "products__wool-runner"))
+    assert check(r, "c1")["evidence"] == ["no product pages discovered"] and check(r, "c3")["status"] == "fail"
+
+
+# --- Fetcher: robots.txt, HTTP errors, rate limit (urlopen is faked; no network) ---
+
+class FakeHTTP:
+    def __init__(self, routes):
+        self.routes, self.calls = routes, []
+
+    def __call__(self, req, timeout=None):
+        import io, urllib.error
+        from email.message import Message
+        url = req.full_url
+        self.calls.append(url)
+        status, body = self.routes.get(url, (404, "nope"))
+        hdrs = Message()
+        hdrs["Content-Type"] = "text/html"
+        if status >= 400:
+            raise urllib.error.HTTPError(url, status, "err", hdrs, io.BytesIO(body.encode()))
+
+        class R(io.BytesIO):
+            def geturl(self_):
+                return url
+        r = R(body.encode())
+        r.status, r.headers = status, hdrs
+        return r
+
+
+def fetcher(monkeypatch, routes, **kw):
+    import ars.fetch
+    fake = FakeHTTP(routes)
+    monkeypatch.setattr(ars.fetch.urllib.request, "urlopen", fake)
+    return ars.fetch.Fetcher(delay=0, **kw), fake
+
+
+def test_fetcher_obeys_robots_for_own_ua(monkeypatch):
+    f, fake = fetcher(monkeypatch, {"https://s.test/robots.txt": (200, "User-agent: agent-readiness-scanner\nDisallow: /private\n"),
+                                    "https://s.test/ok": (200, "hi")})
+    assert f.get("https://s.test/private/x").status == -2
+    assert f.get("https://s.test/ok").text == "hi"
+    assert "https://s.test/private/x" not in fake.calls
+
+
+def test_fetcher_robots_unavailable_vs_unreachable(monkeypatch):
+    f, _ = fetcher(monkeypatch, {"https://a.test/robots.txt": (403, ""), "https://a.test/x": (200, "a"),
+                                 "https://b.test/robots.txt": (503, ""), "https://b.test/x": (200, "b")})
+    assert f.get("https://a.test/x").ok          # 4xx robots.txt: allowed (RFC 9309)
+    assert f.get("https://b.test/x").status == -2  # 5xx robots.txt: assume disallow
+
+
+def test_fetcher_http_error_and_cache(monkeypatch):
+    f, fake = fetcher(monkeypatch, {"https://s.test/robots.txt": (200, ""), "https://s.test/gone": (410, "gone")})
+    r = f.get("https://s.test/gone")
+    assert (r.status, r.ok, r.text) == (410, False, "gone")
+    f.get("https://s.test/gone")
+    assert fake.calls.count("https://s.test/gone") == 1
+
+
+def test_fetcher_rate_limit(monkeypatch):
+    import ars.fetch
+    waits = []
+    monkeypatch.setattr(ars.fetch.time, "sleep", waits.append)
+    f, _ = fetcher(monkeypatch, {"https://s.test/robots.txt": (200, ""), "https://s.test/a": (200, ""), "https://s.test/b": (200, "")})
+    f.delay = 1.0
+    f.get("https://s.test/a"); f.get("https://s.test/b")
+    assert len(waits) >= 2 and all(0 < w <= 1.0 for w in waits)
