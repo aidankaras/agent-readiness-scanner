@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime, timezone
 from . import __version__
 from .checks import ALL
@@ -16,7 +17,8 @@ def scan(url, fetcher=None, now=None):
         try:
             checks.append(fn(ctx))
         except Exception as e:  # a broken check must not kill the scan
-            checks.append({"id": fn.__module__.split(".")[-1][:2], "name": fn.__module__, "status": "fail", "evidence": [f"check error: {type(e).__name__}: {e}"], "fix": ""})
+            name = getattr(sys.modules.get(fn.__module__), "NAME", fn.__module__)
+            checks.append({"id": fn.__module__.split(".")[-1][:2], "name": name, "status": "fail", "evidence": [f"check error: {type(e).__name__}: {e}"], "fix": ""})
     score = sum(WEIGHTS[c["id"]] * VALUE.get(c["status"], 0) for c in checks if c["id"] in WEIGHTS)
     return {"url": ctx.base, "score": round(score, 1), "checks": checks,
             "scanned_at": now or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "version": __version__}

@@ -1,5 +1,6 @@
 import json
 from . import result
+from ..context import walk
 
 NAME = "Catalog / endpoint access"
 
@@ -9,10 +10,13 @@ def ucp_endpoints(ctx):
     if not r.ok:
         return []
     try:
-        svc = json.loads(r.text).get("ucp", {}).get("services", {})
+        u = json.loads(r.text).get("ucp")
     except Exception:
         return []
-    return [b.get("endpoint") for v in svc.values() if isinstance(v, list) for b in v if isinstance(b, dict) and b.get("endpoint")]
+    if not isinstance(u, dict):
+        return []
+    # services may be a map of name -> [bindings] or a list of entries; take every binding with an endpoint
+    return [b["endpoint"] for b in walk(u.get("services")) if isinstance(b.get("endpoint"), str) and b["endpoint"]]
 
 
 def check(ctx):

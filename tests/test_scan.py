@@ -243,3 +243,45 @@ def test_c2_fail_and_sitemap_evidence(tmp_path):
     assert c["status"] == "fail" and c["evidence"][0] == "sitemap.xml: HTTP 404 (not available)", c
     r2 = store(tmp_path, {"sitemap.xml": "<urlset><url><loc>https://tmp2.test/pages/about</loc></url></urlset>"}, name="tmp2")
     assert check(r2, "c2")["evidence"][0] == "sitemap.xml: HTTP 200, no product URLs"
+
+
+# --- c6 checkout signals: UCP profile shapes ---
+
+def ucp(obj):
+    return {".well-known__ucp": json.dumps(obj)}
+
+
+def test_c6_capabilities_and_services_as_lists(tmp_path):
+    prof = {"ucp": {"version": "2026-08-25",
+                    "services": [{"name": "dev.ucp.shopping", "transport": "mcp", "endpoint": "https://tmp.test/api/ucp/mcp"}],
+                    "capabilities": [{"name": "dev.ucp.shopping.checkout", "version": "2026-08-25"}]}}
+    r = store(tmp_path, ucp(prof))
+    assert check(r, "c6")["status"] == "pass", check(r, "c6")
+    assert check(r, "c2")["status"] == "pass"  # endpoint found in list-form services
+
+
+def test_c6_partial_without_checkout_capability(tmp_path):
+    prof = {"ucp": {"version": "2026-08-25", "services": {"dev.ucp.shopping": []}, "capabilities": {"dev.ucp.shopping.order": [{}]}}}
+    c = check(store(tmp_path, ucp(prof)), "c6")
+    assert c["status"] == "partial" and c["fix"]
+
+
+def test_c6_partial_on_invalid_or_odd_profile(tmp_path):
+    for i, body in enumerate(['{"ucp": ', '{"ucp": ["not", "a", "map"]}', '{"ucp": {"version": "x", "capabilities": "checkout"}}']):
+        c = check(store(tmp_path, {".well-known__ucp": body}, name=f"odd{i}"), "c6")
+        assert c["status"] == "partial", (body, c)
+        assert not any("check error" in e for e in c["evidence"])
+
+
+def test_crashing_check_is_recorded_not_raised(monkeypatch):
+    import ars.score
+    import ars.checks.c4_policy as c4
+
+    def boom(ctx):
+        raise RuntimeError("kaput")
+    monkeypatch.setattr(ars.score, "ALL", [boom if fn.__module__ == c4.__name__ else fn for fn in ars.score.ALL])
+    boom.__module__ = c4.__name__
+    r = run("good")
+    c = check(r, "c4")
+    assert c["status"] == "fail" and c["name"] == c4.NAME and "RuntimeError: kaput" in c["evidence"][0]
+    assert r["score"] == 80.0
