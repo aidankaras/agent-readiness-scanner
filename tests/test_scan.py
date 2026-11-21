@@ -6,8 +6,36 @@ from ars.report import markdown, csv_rows
 FX = pathlib.Path(__file__).parent / "fixtures"
 
 
-def run(name):
-    return scan(f"https://{name}.test", FixtureFetcher(f"https://{name}.test", FX / name), now="2026-01-01T00:00:00Z")
+def run(name, root=FX):
+    return scan(f"https://{name}.test", FixtureFetcher(f"https://{name}.test", root / name), now="2026-01-01T00:00:00Z")
+
+
+def store(tmp_path, files, base="good", drop=(), name="tmp"):
+    """Ad-hoc fixture store: copy of fixtures/<base>, minus `drop`, plus `files` (fixture key -> content).
+    URLs inside the copied files are rewritten to https://<name>.test. Returns the scan result."""
+    d = tmp_path / name
+    d.mkdir()
+    if base:
+        for f in (FX / base).iterdir():
+            if f.name not in drop:
+                (d / f.name).write_text(f.read_text().replace(f"https://{base}.test", f"https://{name}.test"))
+    for k, v in files.items():
+        (d / k).write_text(v)
+    return run(name, tmp_path)
+
+
+def check(res, cid):
+    return next(c for c in res["checks"] if c["id"] == cid)
+
+
+def page(body="", ld=None):
+    ld = ld if ld is not None else GOOD_LD
+    return f'<html><head><script type="application/ld+json">{json.dumps(ld)}</script></head><body>{body}</body></html>'
+
+
+GOOD_LD = {"@type": "Product", "name": "Wool Runner", "description": "Lightweight merino running shoe. " * 6,
+           "image": "https://tmp.test/i.jpg", "brand": {"@type": "Brand", "name": "GoodCo"}, "gtin13": "0123456789012",
+           "offers": {"@type": "Offer", "price": "98.00", "priceCurrency": "USD", "availability": "https://schema.org/InStock"}}
 
 
 def st(res):
@@ -20,8 +48,8 @@ def test_weights_sum_100():
 
 def test_good_store_all_pass():
     r = run("good")
-    assert st(r) == {"c1": "pass", "c2": "pass", "c3": "partial", "c4": "pass", "c5": "pass", "c6": "pass", "c7": "info"}, r
-    assert r["score"] == 85.0
+    assert st(r) == {"c1": "pass", "c2": "pass", "c3": "pass", "c4": "pass", "c5": "pass", "c6": "pass", "c7": "info"}, r
+    assert r["score"] == 100.0
 
 
 def test_bad_store():
@@ -40,7 +68,7 @@ def test_deterministic():
 
 def test_report_and_csv():
     r = run("good")
-    assert "Score: 85.0/100" in markdown(r)
+    assert "Score: 100.0/100" in markdown(r)
     rows = list(csv_rows([r, run("bad")]))
     assert rows[0][:2] == ["url", "score"] and len(rows) == 3
 
@@ -64,9 +92,16 @@ def test_training_block_not_penalized():
     assert any("GPTBot" in e for e in c5["evidence"])
 
 
-def test_partial_agent_block():
+def test_agent_token_lists():
     import ars.checks.c5_agent_access as m
     assert "Storebot-Google" in m.AGENT_UAS and "GPTBot" not in m.AGENT_UAS
+    assert not set(m.AGENT_UAS) & set(m.TRAINING_UAS)
+
+
+def test_c5_partial_agent_block(tmp_path):
+    r = store(tmp_path, {"robots.txt": "User-agent: PerplexityBot\nDisallow: /\n"})
+    c = check(r, "c5")
+    assert c["status"] == "partial" and "['PerplexityBot']" in c["evidence"][0], c
 
 
 def test_product_url_patterns():
@@ -82,3 +117,316 @@ def test_examples_match_code():
         res = scan(f"https://{name}.test", FixtureFetcher(f"https://{name}.test", FX / name), now="2026-10-27T00:00:00Z")
         assert (root / f"{name}-store.md").read_text() == markdown(res)
         assert json.loads((root / f"{name}-store.json").read_text()) == res
+
+
+# --- c3 content completeness, non-Shopify alt text (read from <img> tags) ---
+
+def test_c3_non_shopify_can_pass_with_img_alt(tmp_path):
+    r = store(tmp_path, {"products__wool-runner": page('<img src="https://tmp.test/i.jpg?width=600" alt="A nice shoe">')})
+    assert check(r, "c3")["status"] == "pass", check(r, "c3")
+
+
+def test_c3_img_without_alt_is_missing(tmp_path):
+    r = store(tmp_path, {"products__wool-runner": page('<img src="https://tmp.test/i.jpg" alt="">')})
+    c = check(r, "c3")
+    assert c["status"] == "partial" and "image alt text" in c["evidence"][0]
+
+
+def test_c3_no_img_tag_counts_alt_missing(tmp_path):
+    # JSON-LD image but no <img> in the HTML (e.g. JS-rendered): alt text can't be seen, so it isn't credited
+    r = store(tmp_path, {"products__wool-runner": page("Wool Runner")})
+    assert "image alt text" in check(r, "c3")["evidence"][0]
+
+
+def test_c3_prefers_product_image_over_decorative_imgs(tmp_path):
+    body = '<img src="/logo.svg" alt="GoodCo"><img src="/icon.svg" alt="cart"><img src="https://cdn.tmp.test/files/i.jpg?v=1">'
+    r = store(tmp_path, {"products__wool-runner": page(body)})
+    assert "image alt text" in check(r, "c3")["evidence"][0]  # the product image itself has no alt
+
+
+def test_img_tag_parsing():
+    from ars.checks.c3_completeness import img_tags, html_alt_counts
+    tags = img_tags("<IMG src='a.jpg' ALT=\"x &amp; y\"><img data-src=b.jpg>")
+    assert tags == [{"src": "a.jpg", "alt": "x & y"}, {"data-src": "b.jpg"}]
+    assert html_alt_counts("<img src=a.jpg alt=x><img src=b.jpg>", []) == (2, 1)
+    assert html_alt_counts("<p>no images</p>", ["https://x/a.jpg"]) == (0, 0)
+
+
+# --- c4 policy pages: soft 404s, JS shells, keyword match ---
+
+class AlwaysFetcher:
+    """Answers every URL with the same 200 HTML body; `final` (path) simulates a redirect."""
+
+    def __init__(self, body, final=None):
+        self.body, self.final = body, final
+
+    def get(self, url):
+        from ars.fetch import Resp
+        import urllib.parse
+        u = urllib.parse.urlsplit(url)
+        return Resp(f"{u.scheme}://{u.netloc}{self.final}" if self.final else url, 200, "text/html", self.body)
+
+
+def c4_of(fetcher):
+    return check(scan("https://spa.test", fetcher, now="2026-01-01T00:00:00Z"), "c4")
+
+
+def test_c4_js_shell_is_not_a_policy_page():
+    script = "window.__STATE__ = " + json.dumps({"copy": "Free shipping. 30-day returns. Contact support. " * 20})
+    shell = f"<html><head><title>Shop</title><script>{script}</script><style>body{{margin:0}}</style></head><body><div id=app></div></body></html>"
+    c = c4_of(AlwaysFetcher(shell))
+    assert c["status"] == "fail", c
+    assert "return window stated: no" in c["evidence"]
+
+
+def test_c4_soft_404_is_not_a_policy_page():
+    body = "<html><head><title>Page not found</title></head><body><h1>Page not found</h1>" + "<p>Browse our latest collections and new arrivals.</p>" * 8 + "<footer>Free shipping and 30-day returns. Contact us.</footer></body></html>"
+    assert c4_of(AlwaysFetcher(body))["status"] == "fail"
+
+
+def test_c4_redirect_to_home_is_not_a_policy_page():
+    body = "<html><body>" + "<p>Returns, shipping and contact information for our shop, 30 days.</p>" * 6 + "</body></html>"
+    assert c4_of(AlwaysFetcher(body, final="/"))["status"] == "fail"
+
+
+def test_c4_page_must_mention_its_topic(tmp_path):
+    about = "<p>" + "We are a small family business making shoes by hand in Maine. " * 6 + "</p>"
+    r = store(tmp_path, {"pages__returns": about}, drop=("pages__shipping",))
+    c = check(r, "c4")
+    assert "returns: not found" in c["evidence"] and "shipping: not found" in c["evidence"]
+    assert c["status"] == "fail"  # contact only: 1 of 4 points
+
+
+def test_c4_partial_policy_without_window(tmp_path):
+    ret = "<p>" + "Unworn items can be returned for a refund or exchange; email us to start a return. " * 4 + "</p>"
+    r = store(tmp_path, {"pages__returns": ret})
+    c = check(r, "c4")
+    assert c["status"] == "partial" and "return window stated: no" in c["evidence"], c
+
+
+# --- c2 catalog / endpoint access ---
+
+class StatusFetcher(FixtureFetcher):
+    """FixtureFetcher that answers chosen paths with a fixed status code."""
+
+    def __init__(self, base, root, statuses):
+        super().__init__(base, root)
+        self.statuses = statuses
+
+    def get(self, url):
+        from ars.fetch import Resp
+        import urllib.parse
+        path = urllib.parse.urlsplit(url).path
+        if path in self.statuses:
+            return Resp(url, self.statuses[path], "text/html", "")
+        return super().get(url)
+
+
+def c2_with_endpoint_status(code):
+    f = StatusFetcher("https://good.test", FX / "good", {"/api/ucp/mcp": code})
+    return check(scan("https://good.test", f, now="2026-01-01T00:00:00Z"), "c2")
+
+
+def test_c2_declared_endpoint_404_is_not_reachable():
+    for code in (404, 410):
+        c = c2_with_endpoint_status(code)
+        assert c["status"] == "partial", c  # sitemap only
+        assert "path not found" in c["evidence"][1]
+
+
+def test_c2_post_only_endpoint_still_answers():
+    for code in (405, 401, 403, 400):
+        assert c2_with_endpoint_status(code)["status"] == "pass", code
+
+
+def test_c2_endpoint_down():
+    c = c2_with_endpoint_status(503)
+    assert c["status"] == "partial" and "unreachable" in c["evidence"][1]
+
+
+def test_c2_fail_and_sitemap_evidence(tmp_path):
+    r = store(tmp_path, {}, drop=("sitemap.xml", ".well-known__ucp"))
+    c = check(r, "c2")
+    assert c["status"] == "fail" and c["evidence"][0] == "sitemap.xml: HTTP 404 (not available)", c
+    r2 = store(tmp_path, {"sitemap.xml": "<urlset><url><loc>https://tmp2.test/pages/about</loc></url></urlset>"}, name="tmp2")
+    assert check(r2, "c2")["evidence"][0] == "sitemap.xml: HTTP 200, no product URLs"
+
+
+# --- c6 checkout signals: UCP profile shapes ---
+
+def ucp(obj):
+    return {".well-known__ucp": json.dumps(obj)}
+
+
+def test_c6_capabilities_and_services_as_lists(tmp_path):
+    prof = {"ucp": {"version": "2026-08-25",
+                    "services": [{"name": "dev.ucp.shopping", "transport": "mcp", "endpoint": "https://tmp.test/api/ucp/mcp"}],
+                    "capabilities": [{"name": "dev.ucp.shopping.checkout", "version": "2026-08-25"}]}}
+    r = store(tmp_path, ucp(prof))
+    assert check(r, "c6")["status"] == "pass", check(r, "c6")
+    assert check(r, "c2")["status"] == "pass"  # endpoint found in list-form services
+
+
+def test_c6_partial_without_checkout_capability(tmp_path):
+    prof = {"ucp": {"version": "2026-08-25", "services": {"dev.ucp.shopping": []}, "capabilities": {"dev.ucp.shopping.order": [{}]}}}
+    c = check(store(tmp_path, ucp(prof)), "c6")
+    assert c["status"] == "partial" and c["fix"]
+
+
+def test_c6_partial_on_invalid_or_odd_profile(tmp_path):
+    for i, body in enumerate(['{"ucp": ', '{"ucp": ["not", "a", "map"]}', '{"ucp": {"version": "x", "capabilities": "checkout"}}']):
+        c = check(store(tmp_path, {".well-known__ucp": body}, name=f"odd{i}"), "c6")
+        assert c["status"] == "partial", (body, c)
+        assert not any("check error" in e for e in c["evidence"])
+
+
+def test_crashing_check_is_recorded_not_raised(monkeypatch):
+    import ars.score
+    import ars.checks.c4_policy as c4
+
+    def boom(ctx):
+        raise RuntimeError("kaput")
+    monkeypatch.setattr(ars.score, "ALL", [boom if fn.__module__ == c4.__name__ else fn for fn in ars.score.ALL])
+    boom.__module__ = c4.__name__
+    r = run("good")
+    c = check(r, "c4")
+    assert c["status"] == "fail" and c["name"] == c4.NAME and "RuntimeError: kaput" in c["evidence"][0]
+    assert r["score"] == 80.0
+
+
+# --- Shopify path: discovery via /products.json, content from /products/<handle>.json ---
+
+def test_shopify_store():
+    r = run("shopify")
+    assert st(r) == {"c1": "partial", "c2": "partial", "c3": "partial", "c4": "pass", "c5": "pass", "c6": "pass", "c7": "info"}, r
+    assert r["score"] == 72.5
+    c2, c3 = check(r, "c2"), check(r, "c3")
+    assert any("/products.json public" in e for e in c2["evidence"])
+    # discovered through /products.json?limit=5 (no sitemap), in catalog order
+    assert c3["evidence"] == ["https://shopify.test/products/linen-shirt: missing none",
+                              "https://shopify.test/products/wool-hat: missing ['image alt text', 'GTIN or MPN']"]
+
+
+def test_shopify_facts_from_product_json():
+    from ars.checks.c3_completeness import gather
+    from ars.context import Ctx
+    ctx = Ctx("https://shopify.test", FixtureFetcher("https://shopify.test", FX / "shopify"))
+    url, pg = ctx.product_pages()[1]
+    d = gather(ctx, url, pg)
+    assert d["title"] == "Wool Beanie" and d["brand"] == "Shopify Test Co" and len(d["desc"]) >= 150
+    assert (d["images"], d["alts"], d["alt_of"]) == (1, 0, 1)
+    assert d["price"] and not d["ident"] and d["variants_ok"]
+    assert d["avail"]  # not in this page's JSON-LD; taken from the variant's "available" key
+
+
+def test_shopify_unlabeled_variants(tmp_path):
+    p = json.loads((FX / "shopify" / "products__linen-shirt.json").read_text())
+    for v in p["product"]["variants"]:
+        v["title"] = "Default Title"
+    r = store(tmp_path, {"products__linen-shirt.json": json.dumps(p)}, base="shopify")
+    assert "variants labeled" in check(r, "c3")["evidence"][0]
+
+
+def test_shopify_sitemap_index_is_followed(tmp_path):
+    files = {"sitemap.xml": "<sitemapindex><sitemap><loc>https://tmp.test/sitemap_products_1.xml</loc></sitemap></sitemapindex>",
+             "sitemap_products_1.xml": "<urlset><url><loc>https://tmp.test/products/wool-hat</loc></url></urlset>"}
+    r = store(tmp_path, files, base="shopify")
+    assert check(r, "c2")["evidence"][0] == "sitemap.xml: 1 product URLs"
+    assert check(r, "c3")["evidence"][0].startswith("https://tmp.test/products/wool-hat")
+
+
+# --- other partial paths and product discovery ---
+
+def test_c1_partial_missing_fields(tmp_path):
+    ld = {"@type": "Product", "name": "Wool Runner", "image": "https://tmp.test/i.jpg", "brand": "GoodCo"}
+    c = check(store(tmp_path, {"products__wool-runner": page(ld=ld)}), "c1")
+    assert c["status"] == "partial" and "['price', 'priceCurrency', 'availability']" in c["evidence"][0], c
+
+
+def test_c1_offers_on_variants_count(tmp_path):
+    ld = {"@type": "ProductGroup", "name": "Wool Runner", "image": "https://tmp.test/i.jpg", "brand": "GoodCo",
+          "hasVariant": [{"@type": "Product", "offers": {"price": "98", "priceCurrency": "USD", "availability": "InStock"}}]}
+    assert check(store(tmp_path, {"products__wool-runner": page(ld=ld)}), "c1")["status"] == "pass"
+
+
+def test_woocommerce_store_api_discovery(tmp_path):
+    api = json.dumps([{"id": 7, "permalink": "https://tmp.test/product/mug/"}, {"id": 8, "permalink": ""}])
+    files = {"wp-json__wc__store__v1__products__per_page-5": api, "product__mug": page()}
+    r = store(tmp_path, files, drop=("sitemap.xml", "products__wool-runner"))
+    assert check(r, "c3")["evidence"][0].startswith("https://tmp.test/product/mug/:")
+
+
+def test_generic_link_discovery(tmp_path):
+    home = '<a href="/pages/returns">Returns</a> <a href="/shop/p/mug">Mug</a> <a href="https://elsewhere.test/products/x">x</a> <a href="/shop/p/mug">again</a>'
+    r = store(tmp_path, {"index": home, "shop__p__mug": page()}, drop=("sitemap.xml", "products__wool-runner"))
+    assert [e.split(":")[0] + ":" + e.split(":")[1] for e in check(r, "c3")["evidence"]] == ["https://tmp.test/shop/p/mug"]
+
+
+def test_no_products_found(tmp_path):
+    r = store(tmp_path, {}, drop=("sitemap.xml", "products__wool-runner"))
+    assert check(r, "c1")["evidence"] == ["no product pages discovered"] and check(r, "c3")["status"] == "fail"
+
+
+# --- Fetcher: robots.txt, HTTP errors, rate limit (urlopen is faked; no network) ---
+
+class FakeHTTP:
+    def __init__(self, routes):
+        self.routes, self.calls = routes, []
+
+    def __call__(self, req, timeout=None):
+        import io, urllib.error
+        from email.message import Message
+        url = req.full_url
+        self.calls.append(url)
+        status, body = self.routes.get(url, (404, "nope"))
+        hdrs = Message()
+        hdrs["Content-Type"] = "text/html"
+        if status >= 400:
+            raise urllib.error.HTTPError(url, status, "err", hdrs, io.BytesIO(body.encode()))
+
+        class R(io.BytesIO):
+            def geturl(self_):
+                return url
+        r = R(body.encode())
+        r.status, r.headers = status, hdrs
+        return r
+
+
+def fetcher(monkeypatch, routes, **kw):
+    import ars.fetch
+    fake = FakeHTTP(routes)
+    monkeypatch.setattr(ars.fetch.urllib.request, "urlopen", fake)
+    return ars.fetch.Fetcher(delay=0, **kw), fake
+
+
+def test_fetcher_obeys_robots_for_own_ua(monkeypatch):
+    f, fake = fetcher(monkeypatch, {"https://s.test/robots.txt": (200, "User-agent: agent-readiness-scanner\nDisallow: /private\n"),
+                                    "https://s.test/ok": (200, "hi")})
+    assert f.get("https://s.test/private/x").status == -2
+    assert f.get("https://s.test/ok").text == "hi"
+    assert "https://s.test/private/x" not in fake.calls
+
+
+def test_fetcher_robots_unavailable_vs_unreachable(monkeypatch):
+    f, _ = fetcher(monkeypatch, {"https://a.test/robots.txt": (403, ""), "https://a.test/x": (200, "a"),
+                                 "https://b.test/robots.txt": (503, ""), "https://b.test/x": (200, "b")})
+    assert f.get("https://a.test/x").ok          # 4xx robots.txt: allowed (RFC 9309)
+    assert f.get("https://b.test/x").status == -2  # 5xx robots.txt: assume disallow
+
+
+def test_fetcher_http_error_and_cache(monkeypatch):
+    f, fake = fetcher(monkeypatch, {"https://s.test/robots.txt": (200, ""), "https://s.test/gone": (410, "gone")})
+    r = f.get("https://s.test/gone")
+    assert (r.status, r.ok, r.text) == (410, False, "gone")
+    f.get("https://s.test/gone")
+    assert fake.calls.count("https://s.test/gone") == 1
+
+
+def test_fetcher_rate_limit(monkeypatch):
+    import ars.fetch
+    waits = []
+    monkeypatch.setattr(ars.fetch.time, "sleep", waits.append)
+    f, _ = fetcher(monkeypatch, {"https://s.test/robots.txt": (200, ""), "https://s.test/a": (200, ""), "https://s.test/b": (200, "")})
+    f.delay = 1.0
+    f.get("https://s.test/a"); f.get("https://s.test/b")
+    assert len(waits) >= 2 and all(0 < w <= 1.0 for w in waits)

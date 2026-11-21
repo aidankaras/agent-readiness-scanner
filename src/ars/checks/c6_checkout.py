@@ -1,7 +1,17 @@
 import json
-from . import result
+from ._result import result
 
 NAME = "Checkout signals (UCP profile)"
+
+
+def names(x):
+    """Entry names from a UCP map ({name: ...}) or list ([{"name": ...}] or ["name"]); anything else -> empty."""
+    if isinstance(x, dict):
+        return {str(k) for k in x}
+    if isinstance(x, list):
+        return {str(i.get("name")) if isinstance(i, dict) else str(i) for i in x
+                if (isinstance(i, dict) and i.get("name")) or isinstance(i, str)}
+    return set()
 
 
 def check(ctx):
@@ -13,9 +23,10 @@ def check(ctx):
     try:
         u = json.loads(r.text)["ucp"]
     except Exception:
+        u = None
+    if not isinstance(u, dict):
         return result("c6", NAME, "partial", ["/.well-known/ucp present but not valid UCP JSON"], "Fix the UCP profile so it parses as JSON with a top-level 'ucp' object.")
-    caps = set((u.get("capabilities") or {}).keys())
-    svcs = set((u.get("services") or {}).keys())
+    caps, svcs = names(u.get("capabilities")), names(u.get("services"))
     ev = [f"ucp.version {u.get('version')}", f"services {sorted(svcs)}", f"capabilities {sorted(caps)}"]
     has_buy = bool(caps & {"dev.ucp.shopping.checkout", "dev.ucp.shopping.cart"})
     st = "pass" if (u.get("version") and svcs and has_buy) else "partial"

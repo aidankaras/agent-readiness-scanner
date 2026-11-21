@@ -1,5 +1,5 @@
 import urllib.robotparser
-from . import result
+from ._result import result
 
 NAME = "Agent access"
 # robots.txt tokens verified at vendor docs 2026-10-23 (see CHECKS.md "Crawler tokens").
@@ -39,7 +39,7 @@ def check(ctx):
         r = ctx.get(p)
         if r.ok and "<html" not in r.text[:500].lower():
             bonus.append(p)
-    ev.append(f"agent discovery files: {bonus or 'none'} (bonus only)")
+    ev.append(f"info: agent discovery files (not scored): {bonus or 'none'}")
     if wall or len(blocked) >= len(AGENT_UAS) // 2:
         st = "fail"
     elif blocked:

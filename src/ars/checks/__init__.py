@@ -1,10 +1,6 @@
 """Each check: fn(ctx) -> dict(id, name, status in pass|partial|fail|info, evidence:list[str], fix:str)."""
 
-
-def result(cid, name, status, evidence, fix=""):
-    return {"id": cid, "name": name, "status": status, "evidence": evidence, "fix": fix if status != "pass" else ""}
-
-
+from ._result import result  # noqa: F401  (re-exported for callers of ars.checks.result)
 from .c1_page_data import check as c1
 from .c2_catalog import check as c2
 from .c3_completeness import check as c3

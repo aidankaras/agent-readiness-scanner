@@ -2,7 +2,7 @@
 import time, urllib.request, urllib.error, urllib.robotparser, urllib.parse
 from dataclasses import dataclass
 
-UA = "agent-readiness-scanner/0.3 (+https://github.com/aidankaras/agent-readiness-scanner)"
+UA = "agent-readiness-scanner/0.4 (+https://github.com/aidankaras/agent-readiness-scanner)"
 
 
 @dataclass
@@ -32,7 +32,12 @@ class Fetcher:
         if origin not in self._robots:
             rp = urllib.robotparser.RobotFileParser()
             r = self._raw(origin + "/robots.txt")
-            rp.parse(r.text.splitlines() if r.ok else [])
+            if r.ok:
+                rp.parse(r.text.splitlines())
+            elif 400 <= r.status < 500:
+                rp.parse([])  # RFC 9309 2.3.1.3: robots.txt unavailable (4xx) -> crawler may access everything
+            else:
+                rp.disallow_all = True  # RFC 9309 2.3.1.4: unreachable (5xx, network error) -> assume full disallow
             self._robots[origin] = rp
         return self._robots[origin].can_fetch(UA, url)
 

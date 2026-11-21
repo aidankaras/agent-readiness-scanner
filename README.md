@@ -3,11 +3,15 @@
 [![tests](https://github.com/aidankaras/agent-readiness-scanner/actions/workflows/test.yml/badge.svg)](https://github.com/aidankaras/agent-readiness-scanner/actions/workflows/test.yml)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue) ![deps](https://img.shields.io/badge/dependencies-none-brightgreen) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
+**Status: archived November 2026.** No longer maintained; issues and pull requests are closed.
+
 Scores how ready an online store is for AI shopping agents (Google Universal Cart / AI Mode, ChatGPT shopping, agents using the Universal Commerce Protocol), 0-100, with evidence and a fix for every failed check.
 
-**Why:** AI agents started browsing and checking out on shoppers' behalf in 2026. Store owners had no external way to see what those agents can read. Every check here is grounded in vendor documentation (Google, Shopify, OpenAI, ucp.dev), with sources and confidence labels in [docs/CHECKS.md](docs/CHECKS.md).
+**Why:** AI agents started browsing and checking out on shoppers' behalf in 2026. Store owners had no external way to see what those agents can read. Most checks are grounded in vendor documentation (Google, Shopify, OpenAI, ucp.dev), with sources and confidence labels in [docs/CHECKS.md](docs/CHECKS.md). Two parts are assumptions: check 1 (no vendor doc says agents read on-page JSON-LD) and the 150-character minimum description length.
 
-**First study:** 75 small stores. Shopify median 85, Wix/Squarespace/WooCommerce median 45; missing alt text and GTINs everywhere. [Read the findings](docs/FINDINGS-2026-10.md).
+**First study (October 2026, scanner v0.3.0):** 75 small stores. Shopify median 85, Wix/Squarespace/WooCommerce median 45; no GTIN or MPN on 62% of product pages. [Read the findings](docs/FINDINGS-2026-10.md).
+
+**Correction:** the study's alt-text figure (missing on 66% of pages) came from a scanner bug: v0.3.0 could only read alt text on Shopify, so every non-Shopify page counted as missing. On Shopify pages, alt text was missing on at most 81 of 156 (52%). The non-Shopify medians may be understated for the same reason. Fixed in v0.4.0; the study has not been re-run. Details at the top of the findings doc.
 
 ## Quick start
 
@@ -18,7 +22,7 @@ git clone https://github.com/aidankaras/agent-readiness-scanner
 cd agent-readiness-scanner
 pip install -e ".[dev]"
 
-ars example-store.com --md            # markdown report
+ars example.com --md                  # markdown report (use a store you own or may scan)
 ars a.com b.com --csv out.csv         # JSON per store + summary CSV
 pytest                                # offline fixture tests
 ```
@@ -29,15 +33,14 @@ Report for the bundled test store (`tests/fixtures/good`), abridged. Full report
 
 ```text
 # Agent-readiness report: https://good.test
-**Score: 85.0/100** (scanner v0.3.0, 2026-10-27T00:00:00Z; weights are provisional)
+**Score: 100.0/100** (scanner v0.4.0, 2026-10-27T00:00:00Z; weights are provisional)
 ## PASS Page data quality (JSON-LD, crawler fallback) (weight 15)
 - https://good.test/products/wool-runner: Product JSON-LD, missing none
 ## PASS Catalog / endpoint access (weight 10)
 - sitemap.xml: 1 product URLs
-- UCP endpoint https://good.test/api/ucp/mcp declared; GET probe HTTP 200 (host answers; protocol not exercised)
-## PARTIAL Content completeness (weight 30)
-- https://good.test/products/wool-runner: missing ['image alt text']
-Fix: Fill in: image alt text. OpenAI feeds require title, description, url, brand, seller, image, price, availability; GTIN/MPN strongly recommended.
+- UCP endpoint https://good.test/api/ucp/mcp declared; GET probe HTTP 200 (answers; protocol not exercised)
+## PASS Content completeness (weight 30)
+- https://good.test/products/wool-runner: missing none
 ## PASS Policy clarity (weight 20)
 - returns: /pages/returns
 - shipping: /pages/shipping
@@ -46,7 +49,7 @@ Fix: Fill in: image alt text. OpenAI feeds require title, description, url, bran
 ## PASS Agent access (weight 10)
 - robots.txt HTTP 200; shopping/search agents blocked on product page: none
 - info: training crawlers blocked (not scored): none
-- agent discovery files: ['/llms.txt'] (bonus only)
+- info: agent discovery files (not scored): ['/llms.txt']
 ## PASS Checkout signals (UCP profile) (weight 15)
 - ucp.version 2026-08-25
 - services ['dev.ucp.shopping']
@@ -87,19 +90,22 @@ Weights are provisional; see [docs/SPEC.md](docs/SPEC.md).
 
 ## Tests
 
-`pytest` runs offline against fixture stores in `tests/fixtures` (good, bad, bot-wall, training-bot-block). It covers scoring weights, determinism, report output, and each check's pass/partial/fail paths. Nothing hits the network.
+`pytest` runs offline against fixture stores in `tests/fixtures` (good, bad, Shopify, bot-wall, training-bot-block) and small stores built inside the tests. It covers scoring weights, determinism, report output, the pass, partial and fail result of each scored check, the Shopify, WooCommerce and home-page-link product discovery paths, and the HTTP client's robots.txt, error, cache and rate-limit handling (with the network faked). Nothing hits the network. The Shopify fixture follows the fields the scanner reads; it has not been compared with a live store's JSON.
 
 ## How it crawls
 
-- Identifies itself (`agent-readiness-scanner/0.3`) and obeys robots.txt for its own user agent.
+- Identifies itself (`agent-readiness-scanner/0.4`) and obeys robots.txt for its own user agent.
 - One request per second, at most 3 product pages per store, no login-gated pages, no checkout actions.
 - The UCP endpoint is only probed with a GET; the protocol itself is not exercised.
 
 ## Limits
 
-- Product and policy page discovery is heuristic; a "not found" can be a scanner miss.
+- Product and policy page discovery is heuristic; a "not found" can be a scanner miss. Product URLs are matched by path pattern (for example `/products/<slug>` or `/p/<slug>`), and home-page links with `?` or `#` are skipped.
+- Alt text off Shopify is read from `<img>` tags in the page HTML. Images added by JavaScript after load are not seen, so their alt text counts as missing.
+- On Shopify, availability comes from JSON-LD, with a fallback to an `available` field on product-JSON variants. Whether `/products/<handle>.json` includes that field has not been checked against a live store.
+- robots.txt is checked for the requested URL, not again after a redirect. Python's `robotparser` ignores `*` and `$` wildcards in paths, so wildcard rules can be missed (in check 5 too). Response bodies are cut at 3 MB, which can make a very large JSON response look invalid.
 - A single scan is a snapshot.
-- The first-study raw data is not included in this repo; the findings doc reports aggregates only and can't be reproduced from here.
+- The first-study raw data is not included in this repo; the findings doc reports aggregates only and can't be reproduced from here. It was produced with v0.3.0; see the correction at the top of the findings doc.
 - Weights are hand-set, not fitted.
 - It measures documented signals, not whether agents actually recommend or sell a store's products.
 

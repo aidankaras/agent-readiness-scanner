@@ -1,4 +1,6 @@
-# CHECKS.md — M0 findings (2026-10-18)
+# CHECKS.md — initial doc review (2026-10-18)
+
+Research notes written before the scanner was built. "M0" is the label for this initial doc review and "M2" for the first store sample; "PLAN" was a private planning doc not included here. The weights in the section 4 table are the pre-v0.2 draft values; current weights are in `src/ars/score.py` and docs/SPEC.md.
 
 Purpose: what agents actually consume, verified at primary sources, so SPEC.md checks and weights rest on evidence. Every claim below carries a source. Labels: **[V]** = read at primary source today; **[L]** = observed live on a real store today (1 store, single-point evidence); **[U]** = not verified / gap.
 Sources fetched from: developers.openai.com, developers.google.com, shopify.dev, help.shopify.com, ucp.dev.
