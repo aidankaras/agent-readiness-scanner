@@ -29,15 +29,14 @@ Report for the bundled test store (`tests/fixtures/good`), abridged. Full report
 
 ```text
 # Agent-readiness report: https://good.test
-**Score: 85.0/100** (scanner v0.3.0, 2026-10-27T00:00:00Z; weights are provisional)
+**Score: 100.0/100** (scanner v0.3.0, 2026-10-27T00:00:00Z; weights are provisional)
 ## PASS Page data quality (JSON-LD, crawler fallback) (weight 15)
 - https://good.test/products/wool-runner: Product JSON-LD, missing none
 ## PASS Catalog / endpoint access (weight 10)
 - sitemap.xml: 1 product URLs
 - UCP endpoint https://good.test/api/ucp/mcp declared; GET probe HTTP 200 (host answers; protocol not exercised)
-## PARTIAL Content completeness (weight 30)
-- https://good.test/products/wool-runner: missing ['image alt text']
-Fix: Fill in: image alt text. OpenAI feeds require title, description, url, brand, seller, image, price, availability; GTIN/MPN strongly recommended.
+## PASS Content completeness (weight 30)
+- https://good.test/products/wool-runner: missing none
 ## PASS Policy clarity (weight 20)
 - returns: /pages/returns
 - shipping: /pages/shipping

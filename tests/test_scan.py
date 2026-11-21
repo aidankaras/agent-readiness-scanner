@@ -6,8 +6,36 @@ from ars.report import markdown, csv_rows
 FX = pathlib.Path(__file__).parent / "fixtures"
 
 
-def run(name):
-    return scan(f"https://{name}.test", FixtureFetcher(f"https://{name}.test", FX / name), now="2026-01-01T00:00:00Z")
+def run(name, root=FX):
+    return scan(f"https://{name}.test", FixtureFetcher(f"https://{name}.test", root / name), now="2026-01-01T00:00:00Z")
+
+
+def store(tmp_path, files, base="good", drop=(), name="tmp"):
+    """Ad-hoc fixture store: copy of fixtures/<base>, minus `drop`, plus `files` (fixture key -> content).
+    URLs inside the copied files are rewritten to https://<name>.test. Returns the scan result."""
+    d = tmp_path / name
+    d.mkdir()
+    if base:
+        for f in (FX / base).iterdir():
+            if f.name not in drop:
+                (d / f.name).write_text(f.read_text().replace(f"https://{base}.test", f"https://{name}.test"))
+    for k, v in files.items():
+        (d / k).write_text(v)
+    return run(name, tmp_path)
+
+
+def check(res, cid):
+    return next(c for c in res["checks"] if c["id"] == cid)
+
+
+def page(body="", ld=None):
+    ld = ld if ld is not None else GOOD_LD
+    return f'<html><head><script type="application/ld+json">{json.dumps(ld)}</script></head><body>{body}</body></html>'
+
+
+GOOD_LD = {"@type": "Product", "name": "Wool Runner", "description": "Lightweight merino running shoe. " * 6,
+           "image": "https://tmp.test/i.jpg", "brand": {"@type": "Brand", "name": "GoodCo"}, "gtin13": "0123456789012",
+           "offers": {"@type": "Offer", "price": "98.00", "priceCurrency": "USD", "availability": "https://schema.org/InStock"}}
 
 
 def st(res):
@@ -20,8 +48,8 @@ def test_weights_sum_100():
 
 def test_good_store_all_pass():
     r = run("good")
-    assert st(r) == {"c1": "pass", "c2": "pass", "c3": "partial", "c4": "pass", "c5": "pass", "c6": "pass", "c7": "info"}, r
-    assert r["score"] == 85.0
+    assert st(r) == {"c1": "pass", "c2": "pass", "c3": "pass", "c4": "pass", "c5": "pass", "c6": "pass", "c7": "info"}, r
+    assert r["score"] == 100.0
 
 
 def test_bad_store():
@@ -40,7 +68,7 @@ def test_deterministic():
 
 def test_report_and_csv():
     r = run("good")
-    assert "Score: 85.0/100" in markdown(r)
+    assert "Score: 100.0/100" in markdown(r)
     rows = list(csv_rows([r, run("bad")]))
     assert rows[0][:2] == ["url", "score"] and len(rows) == 3
 
@@ -82,3 +110,36 @@ def test_examples_match_code():
         res = scan(f"https://{name}.test", FixtureFetcher(f"https://{name}.test", FX / name), now="2026-10-27T00:00:00Z")
         assert (root / f"{name}-store.md").read_text() == markdown(res)
         assert json.loads((root / f"{name}-store.json").read_text()) == res
+
+
+# --- c3 content completeness, non-Shopify alt text (read from <img> tags) ---
+
+def test_c3_non_shopify_can_pass_with_img_alt(tmp_path):
+    r = store(tmp_path, {"products__wool-runner": page('<img src="https://tmp.test/i.jpg?width=600" alt="A nice shoe">')})
+    assert check(r, "c3")["status"] == "pass", check(r, "c3")
+
+
+def test_c3_img_without_alt_is_missing(tmp_path):
+    r = store(tmp_path, {"products__wool-runner": page('<img src="https://tmp.test/i.jpg" alt="">')})
+    c = check(r, "c3")
+    assert c["status"] == "partial" and "image alt text" in c["evidence"][0]
+
+
+def test_c3_no_img_tag_counts_alt_missing(tmp_path):
+    # JSON-LD image but no <img> in the HTML (e.g. JS-rendered): alt text can't be seen, so it isn't credited
+    r = store(tmp_path, {"products__wool-runner": page("Wool Runner")})
+    assert "image alt text" in check(r, "c3")["evidence"][0]
+
+
+def test_c3_prefers_product_image_over_decorative_imgs(tmp_path):
+    body = '<img src="/logo.svg" alt="GoodCo"><img src="/icon.svg" alt="cart"><img src="https://cdn.tmp.test/files/i.jpg?v=1">'
+    r = store(tmp_path, {"products__wool-runner": page(body)})
+    assert "image alt text" in check(r, "c3")["evidence"][0]  # the product image itself has no alt
+
+
+def test_img_tag_parsing():
+    from ars.checks.c3_completeness import img_tags, html_alt_counts
+    tags = img_tags("<IMG src='a.jpg' ALT=\"x &amp; y\"><img data-src=b.jpg>")
+    assert tags == [{"src": "a.jpg", "alt": "x & y"}, {"data-src": "b.jpg"}]
+    assert html_alt_counts("<img src=a.jpg alt=x><img src=b.jpg>", []) == (2, 1)
+    assert html_alt_counts("<p>no images</p>", ["https://x/a.jpg"]) == (0, 0)
