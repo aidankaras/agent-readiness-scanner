@@ -9,9 +9,9 @@ Scores how ready an online store is for AI shopping agents (Google Universal Car
 
 **Why:** AI agents started browsing and checking out on shoppers' behalf in 2026. Store owners had no external way to see what those agents can read. Most checks are grounded in vendor documentation (Google, Shopify, OpenAI, ucp.dev), with sources and confidence labels in [docs/CHECKS.md](docs/CHECKS.md). Two parts are assumptions: check 1 (no vendor doc says agents read on-page JSON-LD) and the 150-character minimum description length.
 
-**First study (October 2026, scanner v0.3.0):** 75 small stores. Shopify median 85, Wix/Squarespace/WooCommerce median 45; no GTIN or MPN on 62% of product pages. [Read the findings](docs/FINDINGS-2026-10.md).
+**Store study, re-run November 2026 with scanner v0.4.0:** the same store list as October, 74 stores still reachable and in scope. Shopify median 80, Wix/Squarespace/WooCommerce median 45; image alt text missing on 47% of product pages, no GTIN or MPN on 61%. The Shopify figure would be 85 if a declared UCP endpoint answering GET with 404 counted as reachable, as it did in v0.3.0; the re-run explains why that is uncertain. [Read the re-run](docs/FINDINGS-2026-11-rerun.md).
 
-**Correction:** the study's alt-text figure (missing on 66% of pages) came from a scanner bug: v0.3.0 could only read alt text on Shopify, so every non-Shopify page counted as missing. On Shopify pages, alt text was missing on at most 81 of 156 (52%). The non-Shopify medians may be understated for the same reason. Fixed in v0.4.0; the study has not been re-run. Details at the top of the findings doc.
+**Correction to the first study (October 2026, scanner v0.3.0):** its alt-text figure (missing on 66% of pages) came from a scanner bug: v0.3.0 could only read alt text on Shopify, so every non-Shopify page counted as missing. Fixed in v0.4.0. The re-run above measures it properly and separates scanner fixes from store changes over the month. The [original findings](docs/FINDINGS-2026-10.md) stay as published, with a correction note at the top.
 
 ## Quick start
 
@@ -104,8 +104,9 @@ Weights are provisional; see [docs/SPEC.md](docs/SPEC.md).
 - Alt text off Shopify is read from `<img>` tags in the page HTML. Images added by JavaScript after load are not seen, so their alt text counts as missing.
 - On Shopify, availability comes from JSON-LD, with a fallback to an `available` field on product-JSON variants. Whether `/products/<handle>.json` includes that field has not been checked against a live store.
 - robots.txt is checked for the requested URL, not again after a redirect. Python's `robotparser` ignores `*` and `$` wildcards in paths, so wildcard rules can be missed (in check 5 too). Response bodies are cut at 3 MB, which can make a very large JSON response look invalid.
+- A declared UCP endpoint that answers the GET probe with 404 is rated "path not found". An MCP endpoint that only routes POST can answer a GET that way, so this can be a false negative; in the November re-run every Shopify store's endpoint did.
 - A single scan is a snapshot.
-- The first-study raw data is not included in this repo; the findings doc reports aggregates only and can't be reproduced from here. It was produced with v0.3.0; see the correction at the top of the findings doc.
+- The store study's store list and raw data are not included in this repo; both findings docs report aggregates only and can't be reproduced from here. The October study used v0.3.0 (see its correction note); the November re-run used v0.4.0.
 - Weights are hand-set, not fitted.
 - It measures documented signals, not whether agents actually recommend or sell a store's products.
 
