@@ -5,7 +5,7 @@
 > - Off Shopify, the content-completeness check could reach "partial" at best (15 of its 30 points), so the non-Shopify medians below (45, 62.5, 45, 42.5) may be understated.
 > - The policy check in v0.3.0 also accepted some soft-404 and script-only pages as policy pages, and the catalog check counted a declared UCP endpoint answering 404 as reachable. The policy counts (13 of 23, 3 of 52) and the catalog result could move in either direction.
 >
-> These are fixed in scanner v0.4.0. The store list and raw results are not in this repo, so the numbers below have not been re-run; they are left as originally published, apart from the struck-through alt-text line.
+> These are fixed in scanner v0.4.0. **The study was re-run with v0.4.0 in November 2026: see [FINDINGS-2026-11-rerun.md](FINDINGS-2026-11-rerun.md).** Alt text was missing on 47% of pages (51% on Shopify, 38% off it); the non-Shopify median stayed at 45; the Shopify median moved from 85 to 80 because of a stricter catalog rule that may be a false negative (explained there). The re-run is a month later, so it mixes scanner fixes with store changes; that page separates the two. The numbers below are left as originally published, apart from the struck-through alt-text line.
 
 AI shopping is live. Google's Universal Cart launched in the U.S. on October 15, 2026 in Search and the Gemini app. ChatGPT surfaces products from merchant feeds. Behind both sits a new open standard, the Universal Commerce Protocol (UCP): a store publishes a small file at `/.well-known/ucp` that tells AI agents how to browse and buy.
 
